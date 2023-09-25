@@ -1,0 +1,22 @@
+{
+    "M": 3,
+    "np": 1,
+    "na": 2,
+    "nd": 1,              
+    "B": 128,
+    "D": 784, 
+    "Ep": 5, 
+    "N": 60000,              
+    "testN": 10000,          
+    "ML": 2,  
+    "R": 0.01,          
+    "nLayer": 3,         
+    "hiddenDim": 128,      
+    "numClass": 10,       
+    "IE": 1048576,             
+    "BIT_LENGTH": 64,     
+    "DECIMAL_LENGTH": 20, 
+    "BUFFER_MAX": 10000001,     
+    "HEADER_LEN": 4,     
+    "HEADER_LEN_OPT": 2
+}
