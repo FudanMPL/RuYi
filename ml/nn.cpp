@@ -19,19 +19,19 @@ vector<int> NN::random_perm()
     return perm;
 }
 
-void NN::next_batch(MatrixXu &batch, MatrixXu &delta_batch, int start, vector<int> &perm, MatrixXu &data, MatrixXu &delta_data)
+void NN::next_batch(FieldShare &batch, int start, vector<int> &perm, Matrix128 &data, Matrix128 &delta_data)
 {
     int col = data.cols();
     int begin = perm[start];
-    batch = data.block(begin, 0, Config::config->B, col);
-    delta_batch = delta_data.block(begin, 0, Config::config->B, col);
+    batch.eta = data.block(begin, 0, Config::config->B, col);
+    batch.gamma = delta_data.block(begin, 0, Config::config->B, col);
 }
 
-MatrixXu relu(MatrixXu x)
+Matrix128 relu(Matrix128 x)
 {
     for (int i = 0; i < x.size(); i++)
     {
-        if (x(i) >= 0 && x(i) <= 9223372036854775808)
+        if (x(i) >= 0 && x(i) <= 50000000000000001)
             x(i) = x(i);
         else
             x(i) = 0;
@@ -39,15 +39,15 @@ MatrixXu relu(MatrixXu x)
     return x;
 }
 
-MatrixXu NN::argmax(MatrixXu &x)
+Matrix128 NN::argmax(Matrix128 &x)
 {
     int row = x.rows(), col = x.cols();
-    MatrixXu res(row, 1);
-    Matrixint64 temp = x.cast<int64>();
+    Matrix128 res(row, 1);
+    Matrixint64 temp = x.cast<ll>();
     for (int i = 0; i < row; i++)
     {
         int index = 0;
-        int64 max = temp(i, 0);
+        ll max = temp(i, 0);
         for (int j = 1; j < col; j++)
         {
             if (temp(i, j) > max)
@@ -62,75 +62,65 @@ MatrixXu NN::argmax(MatrixXu &x)
     return res;
 }
 
-void NN::forward(MatrixXu &x, MatrixXu &delta_x)
+void NN::forward(FieldShare &x)
 {
     int l = this->layers.size();
     for (int i = 0; i < l; i++)
     {
-        // Constant::Clock *clock_train;
-        // clock_train = new Constant::Clock(3);
-        this->layers[i]->forward(x, delta_x);
-        // this->time[i] += clock_train->get();
+        this->layers[i]->forward(x);
     }
 }
 
-void NN::backward(MatrixXu &delta, MatrixXu &delta_delta)
+void NN::backward(FieldShare &delta)
 {
     int l = this->layers.size();
     for (int i = l - 1; i >= 0; i--)
     {
-        this->layers[i]->backward(delta, delta_delta);
+        this->layers[i]->backward(delta);
     }
 }
 
-void NN::fit(MatrixXu &train_data, MatrixXu &delta_train_data, MatrixXu &test_data, MatrixXu &delta_test_data, int epoch)
+void NN::fit(Matrix128 &train_data, Matrix128 &delta_train_data, Matrix128 &test_data, Matrix128 &delta_test_data, int epoch)
 {
     vector<int> perm = random_perm();
     int start = 0;
     int iterations = 0;
-    MatrixXu x_batch(Config::config->B, Config::config->D), y_batch(Config::config->B, Config::config->numClass);
-    MatrixXu delta_x_batch(Config::config->B, Config::config->D), delta_y_batch(Config::config->B, Config::config->numClass);
+    FieldShare x_batch(Config::config->B, Config::config->D);
+    FieldShare y_batch(Config::config->B, Config::config->numClass);
     Constant::Clock *clock_train;
     clock_train = new Constant::Clock(2);
     for (int i = 0; i < epoch; i++)
     {
-        double error = 0;
+        // Constant::Clock *clock_train;
+        // clock_train = new Constant::Clock(2);
+        // double error = 0;
         for (int j = 0; j < Config::config->N / Config::config->B; j++)
         {
-            if(iterations % 100 == 0)
-            {
-                cout << "第" << iterations << "迭代："<<endl;
-                this->test_model();
-            }
-            iterations++;
-            next_batch(x_batch, delta_x_batch, start, perm, train_data, delta_train_data);
-            next_batch(y_batch, delta_y_batch, start, perm, test_data, delta_test_data);
-            
+            next_batch(x_batch, start, perm, train_data, delta_train_data);
+            next_batch(y_batch, start, perm, test_data, delta_test_data);
+
             start += Config::config->B;
-            MatrixXu output = x_batch;
-            MatrixXu delta_output = delta_x_batch;
-            this->forward(output, delta_output);
-            MatrixXu delta = output - y_batch;
-            MatrixXu delta_delta = delta_output - delta_y_batch;
-            // MatrixXd temp = Mat::u642Double(Secret_Mul::reveal(delta_delta, delta));
+
+            FieldShare output = x_batch;
+            this->forward(output);
+            FieldShare delta = output - y_batch;
+            delta.residual();
+            // MatrixXd temp = FieldShare::decode(delta);
             // error = error + (temp.array() * temp.array()).sum();
-            this->backward(delta, delta_delta);
+            this->backward(delta);
+            // }
+            // cout << "square error" << endl;
+            // cout << error / Config::config->N << endl;
+            // cout << "online time:" << clock_train->get() << endl;
+            // for (int i = 0; i < this->layers.size(); i++)
+            // {
+            //     cout << "layer: " << i << endl;
+            //     this->layers[i]->print();
         }
-        // cout << "square error" << endl;
-        // cout << error / Config::config->N << endl;
-        // this->test_model();
+        this->test_model();
     }
-    // cout << "online time:" << clock_train->get() << endl;
-    // cout << "IT/s:" << epoch / clock_train->get() << endl;
-    // cout << "forward time:" << t1 << endl;
-    // cout << "backward time" << t2 << endl;
-    // for (int i = 0; i < this->layers.size(); i++)
-    // {
-    //     cout << "Forward:" << i << " :" << this->time[i] << endl;
-    // }
-    // this->layers[1]->print();
-    // this->test_model();
-    // cout << "IT/s:" << 10/clock_train->get() << endl;
+    cout << "online time:" << clock_train->get() << endl;
+    cout << "IT/s:" << epoch / clock_train->get() << endl;
 }
 
 void NN::add_layer(Layer *layer)
@@ -143,120 +133,77 @@ LinearLayer::LinearLayer(int input_size, int output_size, bool first_layer)
     this->input_size = input_size;
     this->output_size = output_size;
     this->first_layer = first_layer;
-    this->weight = MatrixXu(input_size, output_size);
-    this->delta_weight = MatrixXu(input_size, output_size);
-    MatrixXu w = MatrixXu(input_size, output_size);
-    static default_random_engine e(time(0));
+    this->weight = new FieldShare(input_size, output_size);
+    Matrix128 w = Matrix128(input_size, output_size);
+    static default_random_engine e;
     static normal_distribution<double> n(0, 0.05);
     MatrixXd m = MatrixXd::Zero(input_size, output_size).unaryExpr([](double dummy)
                                                                    { return n(e); });
     for (int i = 0; i < m.size(); i++)
-        w(i) = Constant::Util::double_to_u64(m(i));
-    MatrixXu gamma = Mat::randomMatrixXu(input_size, output_size);
-    this->delta_weight = IOManager::secret_share(w, gamma);
-    this->weight = w;
-    // this->weight.setZero();
+        w(i) = Constant::Util::double_to_u128(m(i));
+    Matrix128 gamma = Mat::randomMatrixField(input_size, output_size);
+    this->weight.gamma = IOManager::secret_share(w, gamma);
+    this->weight.eta = w;
 }
 
-void LinearLayer::forward(MatrixXu &x, MatrixXu &delta_x)
+void LinearLayer::forward(FieldShare &x)
 {
-    int row = x.rows(), col = this->weight.cols();
+    // Constant::Clock *clock_linear;
+    // clock_linear = new Constant::Clock(2);
     this->input = x;
-    this->delta_input = delta_x;
-
-    // MatrixXu a = Secret_Mul::Mul_reveal(x);
-    // MatrixXu b = Secret_Mul::Mul_reveal(this->weight);
-    // MatrixXu c = a * b;
-    // MatrixXu ab = IOManager::secret_share(c);
-    MatrixXu ab = MatrixXu::Zero(row, col);
-    MatrixXu output(row, col);
-
-    delta_x = Secret_Mul::Mul(x, delta_x, this->weight, this->delta_weight, output, ab);
-    x = output;
+    x = x.Mul(this->weight);
+    // this->for_time += clock_linear->get();
 }
 
-void LinearLayer::backward(MatrixXu &delta, MatrixXu &delta_delta)
+void LinearLayer::backward(FieldShare &delta)
 {
-    MatrixXu input_trans = this->input.transpose();
-    MatrixXu delta_input_trans = this->delta_input.transpose();
-
-    int row = input_trans.rows(), col = delta.cols();
-    // MatrixXu a = Secret_Mul::Mul_reveal(input_trans);
-    // MatrixXu b = Secret_Mul::Mul_reveal(delta);
-    // MatrixXu c = a * b;
-    // MatrixXu ab = IOManager::secret_share(c);
-    MatrixXu ab = MatrixXu::Zero(row, col);
-    MatrixXu w_gradients(row, col);
-
-    MatrixXu delta_w_gradients = Secret_Mul::Mul(input_trans, delta_input_trans, delta, delta_delta, w_gradients, ab);
-    this->delta_weight = this->delta_weight - Secret_Mul::Constant_Mul(delta_w_gradients, w_gradients, Config::config->R / Config::config->B);
-    this->weight = this->weight - w_gradients;
-
-    MatrixXu weight_trans = this->weight.transpose();
-    MatrixXu delta_weight_trans = this->delta_weight.transpose();
+    // Constant::Clock *clock_linear;
+    // clock_linear = new Constant::Clock(2);
+    FieldShare w_gradients = input.Mul_tran(delta);
     if (!first_layer)
     {
-        int row = delta.rows(), col = weight_trans.cols();
-        // MatrixXu u = Secret_Mul::Mul_reveal(delta);
-        // MatrixXu v = Secret_Mul::Mul_reveal(weight_trans);
-        // MatrixXu h = u * v;
-        // MatrixXu uv = IOManager::secret_share(h);
-        MatrixXu uv = MatrixXu::Zero(row, col);
-        MatrixXu next_delta(row, col);
-
-        delta_delta = Secret_Mul::Mul(delta, delta_delta, weight_trans, delta_weight_trans, next_delta, uv);
-        delta = next_delta;
+        delta = delta.Tran_mul(this->weight);
     }
+    this->weight = this->weight - w_gradients * (double)(Config::config->R / Config::config->B);
+    this->weight.residual();
+
+    // this->back_time += clock_linear->get();
 }
 
-void ReluLayer::forward(MatrixXu &x, MatrixXu &delta_x)
+void ReluLayer::forward(FieldShare &x)
 {
-    int row = x.rows(), col = x.cols();
-    this->sign = MatrixXu(row, col);
-    // Constant::Clock *clock_train;
-    // clock_train = new Constant::Clock(3);
-    MatrixXu bool_share_bit = Secret_Cmp::get_bool_share_bit(x, delta_x);
-    // this->time0 += clock_train->get();
-    // Constant::Clock *clock_train1;
-    // clock_train1 = new Constant::Clock(3);
-    this->delta_sign = Secret_Cmp::get_sign_xor_1(bool_share_bit, this->sign);
-    // this->time1 += clock_train1->get();
+    // Constant::Clock *clock_relu;
+    // clock_relu = new Constant::Clock(2);
+    this->sign = 1 - (x < 0);
 
-    // MatrixXu a = Secret_Mul::Mul_reveal(x);
-    // MatrixXu b = Secret_Mul::Mul_reveal(this->sign);
-    // MatrixXu c = a.cwiseProduct(b);
-    // MatrixXu ab = IOManager::secret_share(c);
-    MatrixXu ab = MatrixXu::Zero(row, col);
-    MatrixXu result(row, col);
-
-    delta_x = Secret_Mul::Element_Wise(x, delta_x, this->sign, this->delta_sign, result, ab);
-    x = result;
+    x = x * this->sign;
+    // this->for_time += clock_relu->get();
 }
 
-void ReluLayer::backward(MatrixXu &delta, MatrixXu &delta_delta)
+void ReluLayer::backward(FieldShare &delta)
 {
-    int row = delta.rows(), col = delta.cols();
+    // Constant::Clock *clock_relu;
+    // clock_relu = new Constant::Clock(2);
 
-    // MatrixXu a = Secret_Mul::Mul_reveal(delta);
-    // MatrixXu b = Secret_Mul::Mul_reveal(this->sign);
-    // MatrixXu c = a.cwiseProduct(b);
-    // MatrixXu ab = IOManager::secret_share(c);
-    MatrixXu ab = MatrixXu::Zero(row, col);
-    MatrixXu result(row, col);
-
-    delta_delta = Secret_Mul::Element_Wise(delta, delta_delta, this->sign, this->delta_sign, result, ab);
-    delta = result;
+    delta = delta * this->sign;
+    // this->back_time += clock_relu->get();
 }
 
 void NN::train_model()
 {
-    MatrixXu train_data = IOManager::train_data;
-    MatrixXu train_label = IOManager::train_label;
-    MatrixXu delta_train_data = IOManager::train_data_delta;
-    MatrixXu delta_train_label = IOManager::train_label_delta;
+    Matrix128 train_data = IOManager::train_data;
+    Matrix128 train_label = IOManager::train_label;
+    Matrix128 delta_train_data = IOManager::train_data_delta;
+    Matrix128 delta_train_label = IOManager::train_label_delta;
 
-    MatrixXu test_data = IOManager::test_data;
-    MatrixXu test_label = IOManager::test_label;
+    Matrix128 test_data = IOManager::test_data;
+    Matrix128 test_label = IOManager::test_label;
+
+    int m = (Config::config->K) - 1;
+    nn_cmp_off1 = new Cmp_offline(Config::config->B, Config::config->hiddenDim, Config::config->K, m);
+    nn_cmp_off2 = new Cmp_offline(Config::config->hiddenDim, Config::config->hiddenDim, Config::config->K, m);
+    nn_cmp_off3 = new Cmp_offline(Config::config->B, Config::config->hiddenDim, Config::config->K, 1);
+    nn_cmp_off4 = new Cmp_offline(Config::config->hiddenDim, Config::config->hiddenDim, Config::config->K, 1);
 
     NN net;
     Layer *linearLayer0 = new LinearLayer(Config::config->D, Config::config->hiddenDim, true);
@@ -269,74 +216,61 @@ void NN::train_model()
     net.add_layer(reluLayer1);
     Layer *linearLayer2 = new LinearLayer(Config::config->hiddenDim, Config::config->numClass);
     net.add_layer(linearLayer2);
-    int size = net.layers.size();
-    net.time.resize(size);
+    // int size = net.layers.size();
+    // net.time.resize(size);
     net.fit(train_data, delta_train_data, train_label, delta_train_label, Config::config->Ep);
-    // net.inference(test_data, test_label);
-    // cout << "time_0:" << time_0 << endl;
-    // cout << "time_1:" << time_1 << endl;
-    // cout << "cnt:" << cnt << endl;
-    // cout << "cnt1:" << cnt1 << endl;
-    // cout << "size_:" << size_ << endl;
 }
 
 void NN::test_model()
 {
     double count = 0;
-    MatrixXu test_data = IOManager::test_data;
-    MatrixXu test_label = IOManager::test_label;
+    Matrix128 test_data = IOManager::test_data;
+    Matrix128 test_label = IOManager::test_label;
 
-    vector<MatrixXu> W_(static_cast<unsigned long>(Config::config->nLayer + 1));
-    vector<MatrixXu> A(static_cast<unsigned long>(Config::config->nLayer + 1));
-    vector<MatrixXu> Z(static_cast<unsigned long>(Config::config->nLayer + 1));
+    vector<Matrix128> W_(static_cast<unsigned long>(Config::config->nLayer + 1));
+    vector<Matrix128> A(static_cast<unsigned long>(Config::config->nLayer + 1));
+    vector<Matrix128> Z(static_cast<unsigned long>(Config::config->nLayer + 1));
     A[0] = test_data;
-    MatrixXu result;
+    Matrix128 result;
 
-    // if (party == 0)
-    // {
-        W_[1] = Secret_Mul::reveal(this->layers[0]->delta_weight, this->layers[0]->weight);
-        W_[2] = Secret_Mul::reveal(this->layers[2]->delta_weight, this->layers[2]->weight);
-        W_[3] = Secret_Mul::reveal(this->layers[4]->delta_weight, this->layers[4]->weight);
+    W_[1] = this->layers[0]->weight.reveal();
+    W_[2] = this->layers[2]->weight.reveal();
+    W_[3] = this->layers[4]->weight.reveal();
 
-        for (int l = 1; l <= Config::config->nLayer; l++)
-        {
-            Z[l] = A[l - 1] * W_[l];
-            Mat::truncateMatrixXu(Z[l]);
-            if (l == Config::config->nLayer)
-                A[l] = Z[l];
-            else
-                A[l] = relu(Z[l]);
-        }
-        result = A[Config::config->nLayer];
-        MatrixXu res = argmax(result);
-        MatrixXu label = argmax(test_label);
-        for (int i = 0; i < Config::config->testN; i++)
-        {
-            // double resulttt = Constant::Util::u64_to_double(result(i, 0));
-            // if (resulttt > 0.5 && test_label(i, 0) == 1048576)
-            //     count++;
-            // else if (resulttt < 0.5 && test_label(i, 0) == 0)
-            //     count++;
-            if (res(i, 0) == label(i, 0))
-            {
-                count++;
-            }
-        }
-        cout << "accuracy:" << count / Config::config->testN << endl;
-    // }
-    // else
-    // {
-    //     W_[1] = Secret_Mul::reveal(this->layers[0]->delta_weight, this->layers[0]->weight);
-    //     W_[2] = Secret_Mul::reveal(this->layers[2]->delta_weight, this->layers[2]->weight);
-    //     W_[3] = Secret_Mul::reveal(this->layers[4]->delta_weight, this->layers[4]->weight);
-    // }
+    for (int l = 1; l <= Config::config->nLayer; l++)
+    {
+        Z[l] = A[l - 1] * W_[l];
+        Z[l] = Z[l].unaryExpr([](const u128 x)
+                              { return x % P; });
+        Mat::truncateMatrix128(Z[l]);
+        if (l == Config::config->nLayer)
+            A[l] = Z[l];
+        else
+            A[l] = relu(Z[l]);
+    }
+    result = A[Config::config->nLayer];
+    // Matrix128 res = argmax(result);
+    // Matrix128 label = argmax(test_label);
+    for (int i = 0; i < Config::config->testN; i++)
+    {
+        double resulttt = Constant::Util::field_to_double(result(i, 0));
+        if (resulttt > 0.5 && test_label(i, 0) == Config::config->IE)
+            count++;
+        else if (resulttt < 0.5 && test_label(i, 0) == 0)
+            count++;
+        // if (res(i, 0) == label(i, 0))
+        // {
+        //     count++;
+        // }
+    }
+    cout << "accuracy:" << count / Config::config->testN << endl;
 }
 
-// void NN::inference(MatrixXu &x, MatrixXu &y)
+// void NN::inference(Matrix128 &x, Matrix128 &y)
 // {
 //     int l = y.rows();
 //     int batch_len = ceil(l / Config::config->B);
-//     MatrixXu x_batch, y_batch, y_batch_plaintext;
+//     Matrix128 x_batch, y_batch, y_batch_plaintext;
 //     int count = 0;
 
 //     for (int j = 0; j < batch_len; j++)
@@ -344,11 +278,11 @@ void NN::test_model()
 //         int temp = min(Config::config->B, l - j * Config::config->B);
 //         x_batch = x.middleRows(j * Config::config->B, temp);
 //         y_batch = y.middleRows(j * Config::config->B, temp);
-//         MatrixXu predict = this->forward(x_batch);
+//         Matrix128 predict = this->forward(x_batch);
 //         predict = Secret_Mul::Mul_reveal(predict);
 //         y_batch_plaintext = Secret_Mul::Mul_reveal(y_batch);
-//         MatrixXu res = argmax(predict);
-//         MatrixXu label = argmax(y_batch_plaintext);
+//         Matrix128 res = argmax(predict);
+//         Matrix128 label = argmax(y_batch_plaintext);
 //         for (int i = 0; i < temp; i++)
 //         {
 //             // if (predict(i) > IE / 2)

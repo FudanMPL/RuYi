@@ -1,7 +1,6 @@
 #include "linear.h"
 
-MatrixXu Linear::w;
-MatrixXu Linear::delta_w;
+FieldShare Linear::w;
 
 int Linear::myrandom(int i) { return rand() % i; }
 
@@ -20,22 +19,22 @@ vector<int> Linear::random_perm()
     return perm;
 }
 
-void Linear::next_batch(MatrixXu &batch, MatrixXu &delta_batch, int start, vector<int> &perm, MatrixXu &data, MatrixXu &delta_data)
+void Linear::next_batch(FieldShare &batch, int start, vector<int> &perm, Matrix128 &data, Matrix128 &delta_data)
 {
     int col = data.cols();
-    batch = data.block(perm[start], 0, Config::config->B, col);
-    delta_batch = delta_data.block(perm[start], 0, Config::config->B, col);
+    batch.eta = data.block(perm[start], 0, Config::config->B, col);
+    batch.gamma = delta_data.block(perm[start], 0, Config::config->B, col);
 }
 
-MatrixXu Linear::argmax(MatrixXu &x)
+Matrix128 Linear::argmax(Matrix128 &x)
 {
     int row = x.rows(), col = x.cols();
-    MatrixXu res(row, 1);
-    Matrixint64 temp = x.cast<int64>();
+    Matrix128 res(row, 1);
+    Matrixint64 temp = x.cast<ll>();
     for (int i = 0; i < row; i++)
     {
         int index = 0;
-        int64 max = temp(i, 0);
+        ll max = temp(i, 0);
         for (int j = 1; j < col; j++)
         {
             if (temp(i, j) > max)
@@ -49,227 +48,139 @@ MatrixXu Linear::argmax(MatrixXu &x)
     return res;
 }
 
-// void Linear::train_model()
-// {
-
-//     MatrixXu x_batch(Config::config->B, Config::config->D), y_batch(Config::config->B, Config::config->numClass);
-//     MatrixXu train_data = IOManager::train_data;
-//     MatrixXu train_label = IOManager::train_label;
-//     w = MatrixXu(Config::config->D, Config::config->numClass);
-//     delta_w = MatrixXu(Config::config->D, Config::config->numClass);
-//     w.setZero();
-//     delta_w.setZero();
-//     cout << "weights initialized" << endl;
-//     vector<int> perm = random_perm();
-
-//     int start = 0;
-//     MatrixXu r0(Config::config->B, Config::config->D), q0(Config::config->D, Config::config->numClass), t0(Config::config->B, Config::config->numClass), r1(Config::config->D, Config::config->B), q1(Config::config->B, Config::config->numClass), t1(Config::config->D, Config::config->numClass);
-//     MatrixXu wx(Config::config->B, Config::config->numClass), wx_y(Config::config->B, Config::config->numClass);
-
-//     Constant::Clock *clock_train;
-//     clock_train = new Constant::Clock(2);
-
-//     for (int j = 0; j < Config::config->Ep; j++)
-//     {
-//         // double error = 0;
-//         // cout << "第" << j << "个epoch" << endl;
-//         for (int i = 0; i < Config::config->N / Config::config->B; i++)
-//         {
-//             next_batch(x_batch, start, perm, train_data);
-//             next_batch(y_batch, start, perm, train_label); //选出mini batch
-
-//             start += Config::config->B;
-//             r0 = Secret_Mul::r0;
-//             r1 = Secret_Mul::r1;
-//             q0 = Secret_Mul::q0;
-//             q1 = Secret_Mul::q1;
-//             t0 = Secret_Mul::t0;
-//             t1 = Secret_Mul::t1;
-
-//             wx = Secret_Mul::Multiply(x_batch, w, r0, q0, t0);
-
-//             wx_y = wx - y_batch;
-
-//             // MatrixXd temp = Mat::u642Double(Secret_Mul::Mul_reveal(wx_y));
-//             // error = error + (temp.array() * temp.array()).sum();
-
-//             MatrixXu x_batch_trans = x_batch.transpose();
-
-//             MatrixXu delta;
-//             delta = Secret_Mul::Multiply(x_batch_trans, wx_y, r1, q1, t1);
-//             w = w - Secret_Mul::constant_Mul(delta, 0.01 / Config::config->B);
-//             // w = w - Mat::constant_multiply(delta, 0.01 / Config::config->B);
-//         }
-//         // cout << "square error" << endl;
-//         // cout << error / Config::config->N << endl;
-//         // test_model();
-//     }
-//     cout << "online time:" << clock_train->get() << endl;
-//     // cout << "it/s:" << 100 / clock_train->get() << endl;
-//     // inference();
-//     test_model();
-// }
-
 void Linear::train_model()
 {
-
-    MatrixXu x_batch(Config::config->B, Config::config->D), y_batch(Config::config->B, Config::config->numClass);
-    MatrixXu delta_x_batch(Config::config->B, Config::config->D), delta_y_batch(Config::config->B, Config::config->numClass);
-    MatrixXu train_data = IOManager::train_data;
-    MatrixXu train_label = IOManager::train_label;
-    MatrixXu delta_train_data = IOManager::train_data_delta;
-    MatrixXu delta_train_label = IOManager::train_label_delta;
-    w = MatrixXu(Config::config->D, Config::config->numClass);
-    delta_w = MatrixXu(Config::config->D, Config::config->numClass);
+    FieldShare x_batch(Config::config->B, Config::config->D);
+    FieldShare y_batch(Config::config->B, Config::config->numClass);
+    Matrix128 train_data = IOManager::train_data;
+    Matrix128 train_label = IOManager::train_label;
+    Matrix128 delta_train_data = IOManager::train_data_delta;
+    Matrix128 delta_train_label = IOManager::train_label_delta;
+    w = new FieldShare(Config::config->D, Config::config->numClass);
     w.setZero();
-    delta_w.setZero();
     cout << "weights initialized" << endl;
     vector<int> perm = random_perm();
 
     int start = 0;
-    double t1 = 0;
-    double t2 = 0;
     int iterations = 0;
-    MatrixXu wx(Config::config->B, Config::config->numClass), wx_y(Config::config->B, Config::config->numClass);
-    MatrixXu delta_wx(Config::config->B, Config::config->numClass), delta_wx_y(Config::config->B, Config::config->numClass);
+    FieldShare wx(Config::config->B, Config::config->numClass);
+    FieldShare wx_y(Config::config->B, Config::config->numClass);
 
     Constant::Clock *clock_train;
-    clock_train = new Constant::Clock(1);
-
+    clock_train = new Constant::Clock(2);
     for (int j = 0; j < Config::config->Ep; j++)
     {
         // double error = 0;
-        // cout << "第" << j << "个epoch" << endl;
+
         for (int i = 0; i < Config::config->N / Config::config->B; i++)
         {
-            if(iterations % 100 == 0)
-            {
-                cout << "第" << iterations << "迭代："<<endl;
-                test_model();
-            }
-            iterations++;
-            // next_batch(x_batch, start, perm, train_data);
-            // next_batch(delta_x_batch, start, perm, delta_train_data);
-            // next_batch(y_batch, start, perm, train_label);
-            // next_batch(delta_y_batch, start, perm, delta_train_label); // 选出mini batch
-            next_batch(x_batch, delta_x_batch, start, perm, train_data, delta_train_data);
-            next_batch(y_batch, delta_y_batch, start, perm, train_label, delta_train_label);
+            // cout << "it:" << i << endl;
+            next_batch(x_batch, start, perm, train_data, delta_train_data);
+            next_batch(y_batch, start, perm, train_label, delta_train_label);
             start += Config::config->B;
 
-            // MatrixXu a = Secret_Mul::Mul_reveal(x_batch);
-            // MatrixXu b = Secret_Mul::Mul_reveal(w);
-            // MatrixXu c = a * b;
-            // MatrixXu ab = IOManager::secret_share(c);
-            MatrixXu ab = MatrixXu::Zero(Config::config->B, Config::config->numClass);
+            // Matrix128 a = Secret_Mul::Mul_reveal(x_batch);
+            // Matrix128 b = Secret_Mul::Mul_reveal(w);
+            // Matrix128 c = a * b;
+            // Matrix128 ab = IOManager::secret_share(c);
+            // cout << __LINE__ << endl;
 
-            delta_wx = Secret_Mul::Mul(x_batch, delta_x_batch, w, delta_w, wx, ab);
+            wx = x_batch.Mul(w);
 
+            // cout << __LINE__ << endl;
             wx_y = wx - y_batch;
-            delta_wx_y = delta_wx - delta_y_batch;
-
-            // MatrixXd temp = Mat::u642Double(Secret_Mul::reveal(delta_wx_y, wx_y));
+            wx_y.residual();
+            // calculate the loss
+            // MatrixXd temp = FieldShare::decode(wx_y);
             // error = error + (temp.array() * temp.array()).sum();
 
-            MatrixXu x_batch_trans = x_batch.transpose();
-            MatrixXu delta_x_batch_trans = delta_x_batch.transpose();
+            FieldShare delta = x_batch.Mul_tran(wx_y);
 
-            MatrixXu delta(Config::config->D, Config::config->numClass), delta_delta(Config::config->D, Config::config->numClass);
-            // MatrixXu u = a.transpose();
-            // MatrixXu v = Secret_Mul::Mul_reveal(wx_y);
-            // MatrixXu h = u * v;
-            // MatrixXu uv = IOManager::secret_share(h);
+            // cout << __LINE__ << endl;
 
-            MatrixXu uv = MatrixXu::Zero(Config::config->D, Config::config->numClass);
-
-            delta_delta = Secret_Mul::Mul(x_batch_trans, delta_x_batch_trans, wx_y, delta_wx_y, delta, uv);
-            delta_w = delta_w - Secret_Mul::Constant_Mul(delta_delta, delta, 0.01 / Config::config->B);
-            w = w - delta;
-            // double time2 = clock_train2->get();
-            // t2 += time2;
-            // }
-            // cout << "square error" << endl;
-            // cout << error / Config::config->N << endl;
+            w = w - delta * (double)(Config::config->R / Config::config->B);
+            // cout << __LINE__ << endl;
+            w.residual();
             // test_model();
         }
-        // cout << "online time:" << clock_train->get() << endl;
-        // cout << "it/s:" << Config::config->Ep / clock_train->get() << endl;
-        // inference();
-        // test_model();
+        // cout << "square error" << endl;
+        // cout << error / Config::config->N << endl;
+        test_model();
     }
+    cout << "online time:" << clock_train->get() << endl;
+
+    cout << "it/s:" << Config::config->Ep / clock_train->get() << endl;
 }
 
-    void Linear::test_model()
+void Linear::test_model()
+{
+    double count = 0;
+    Matrix128 w_(Config::config->D, Config::config->numClass);
+    Matrix128 test_data = IOManager::test_data;
+    Matrix128 test_label = IOManager::test_label;
+    w_ = w.reveal();
+    Matrix128 y_ = test_data * w_;
+    y_ = y_.unaryExpr([](const u128 x)
+                      { return x % P; });
+    Mat::truncateMatrix128(y_);
+    // cout << y_ << endl;
+    // Matrix128 res = argmax(y_);
+    // Matrix128 label = argmax(test_label);
+    for (int i = 0; i < Config::config->testN; i++)
     {
-        double count = 0;
-        MatrixXu w_(Config::config->D, Config::config->numClass);
-        MatrixXu test_data = IOManager::test_data;
-        MatrixXu test_label = IOManager::test_label;
-        // if (party == 0)
-        // {
-            w_ = Secret_Mul::reveal(delta_w, w);
-            MatrixXu y_ = test_data * w_;
-            Mat::truncateMatrixXu(y_);
-            // MatrixXu res = argmax(y_);
-            // MatrixXu label = argmax(test_label);
-            for (int i = 0; i < Config::config->testN; i++)
-            {
-                double yyy = Constant::Util::u64_to_double(y_(i, 0));
-                if (yyy > 0.5 && test_label(i, 0) == 1048576)
-                {
-                    count++;
-                }
-                else if (yyy < 0.5 && test_label(i, 0) == 0)
-                {
-                    count++;
-                }
-                // if (res(i, 0) == label(i, 0))
-                // {
-                //     count++;
-                // }
-            }
-            cout << "acurracy:" << count / Config::config->testN << endl;
-        // }
-        // else
-        // {
-        //     Secret_Mul::reveal(delta_w, w);
-        // }
-    }
-
-    void Linear::inference()
-    {
-        MatrixXu test_data = IOManager::test_data;
-        MatrixXu test_label = IOManager::test_label;
-        double count = 0;
-        int it = ceil(Config::config->testN / Config::config->B);
-        MatrixXu x_batch, y_batch, y_infer;
-
-        MatrixXu r0(Config::config->B, Config::config->D), q0(Config::config->D, Config::config->numClass), t0(Config::config->B, Config::config->numClass);
-        r0 = Secret_Mul::r0;
-        q0 = Secret_Mul::q0;
-        t0 = Secret_Mul::t0;
-        for (int i = 0; i < it; i++)
+        double yyy = Constant::Util::field_to_double(y_(i, 0));
+        // cout << yyy << endl;
+        if (yyy > 0.5 && test_label(i, 0) == Config::config->IE)
         {
-            int temp = min(Config::config->B, Config::config->testN - i * Config::config->B);
-            x_batch = test_data.middleRows(i * Config::config->B, temp);
-            y_batch = test_label.middleRows(i * Config::config->B, temp);
-            y_infer = Secret_Mul::Multiply(x_batch, w, r0, q0, t0);
-            MatrixXu y_predict = Secret_Mul::Mul_reveal(y_infer);
-            MatrixXu y_plaintext = Secret_Mul::Mul_reveal(y_batch);
-            MatrixXu res = argmax(y_predict);
-            MatrixXu label = argmax(y_plaintext);
-            for (int j = 0; j < temp; j++)
-            {
-                // double yyy = Constant::Util::u64_to_double(y_predict(j));
-                // if (yyy > 0.5)
-                //     y_predict(j) = Config::config->IE;
-                // else
-                //     y_predict(j) = 0;
-                // count = count + (y_predict(j) == y_plaintext(j));
-                if (res(i, 0) == label(i, 0))
-                {
-                    count++;
-                }
-            }
+            count++;
         }
-        cout << "accuracy of inference:" << count * 1.0 / Config::config->testN << endl;
+        else if (yyy < 0.5 && test_label(i, 0) == 0)
+        {
+            count++;
+        }
+        // if (res(i, 0) == label(i, 0))
+        // {
+        //     count++;
+        // }
     }
+    cout << "acurracy:" << count / Config::config->testN << endl;
+}
+
+// void Linear::inference()
+// {
+//     Matrix128 test_data = IOManager::test_data;
+//     Matrix128 test_label = IOManager::test_label;
+//     double count = 0;
+//     int it = ceil(Config::config->testN / Config::config->B);
+//     Matrix128 x_batch, y_batch, y_infer;
+
+//     Matrix128 r0(Config::config->B, Config::config->D), q0(Config::config->D, Config::config->numClass), t0(Config::config->B, Config::config->numClass);
+//     r0 = Secret_Mul::r0;
+//     q0 = Secret_Mul::q0;
+//     t0 = Secret_Mul::t0;
+//     for (int i = 0; i < it; i++)
+//     {
+//         int temp = min(Config::config->B, Config::config->testN - i * Config::config->B);
+//         x_batch = test_data.middleRows(i * Config::config->B, temp);
+//         y_batch = test_label.middleRows(i * Config::config->B, temp);
+//         y_infer = Secret_Mul::Multiply(x_batch, w, r0, q0, t0);
+//         Matrix128 y_predict = Secret_Mul::Mul_reveal(y_infer);
+//         Matrix128 y_plaintext = Secret_Mul::Mul_reveal(y_batch);
+//         Matrix128 res = argmax(y_predict);
+//         Matrix128 label = argmax(y_plaintext);
+//         for (int j = 0; j < temp; j++)
+//         {
+//             // double yyy = Constant::Util::u64_to_double(y_predict(j));
+//             // if (yyy > 0.5)
+//             //     y_predict(j) = Config::config->IE;
+//             // else
+//             //     y_predict(j) = 0;
+//             // count = count + (y_predict(j) == y_plaintext(j));
+//             if (res(i, 0) == label(i, 0))
+//             {
+//                 count++;
+//             }
+//         }
+//     }
+//     cout << "accuracy of inference:" << count * 1.0 / Config::config->testN << endl;
+// }

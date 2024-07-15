@@ -1,14 +1,8 @@
 #include "Constant.h"
 
 int party;
-// double time_0 = 0;
-// double time_1 = 0;
-// double time_3 = 0;
-// double time_4 = 0;
-// int cnt = 0;
-// int cnt1 = 0;
-// int size_ = 0;
-
+u128 pow_2_i[64];
+u128 pow_2_i_inverse[64];
 u64 Constant::Clock::global_clock[101] = {0};
 
 void Constant::Clock::print_clock(int id)
@@ -93,14 +87,40 @@ double Constant::Util::u64_to_double(u64 u)
     return (long)u / (double)Config::config->IE;
 }
 
+u128 Constant::Util::double_to_u128(double x)
+{
+    return static_cast<u128>((ll)(x * Config::config->IE));
+}
+
+double Constant::Util::field_to_double(u128 u)
+{
+    ll temp;
+    if (u > P / 2)
+        temp = (ll)(u - P);
+    else
+        temp = (ll)u;
+    double res;
+    res = (double)(temp * 1.0) / Config::config->IE;
+    return res;
+}
+
 double Constant::Util::char_to_double(char *&p)
 {
     return strtod(p, NULL);
 }
 
+void Constant::Util::field_to_bool(bool *bool_, u128 u)
+{
+    for (int i = 0; i < 64; i++)
+    {
+        bool_[i] = (u & 1);
+        u >>= 1;
+    }
+}
+
 u64 Constant::Util::getu64(char *&p)
 {
-     while (!isdigit(*p))
+    while (!isdigit(*p))
         p++;
     u64 ret = 0;
     while (isdigit(*p))
@@ -109,24 +129,37 @@ u64 Constant::Util::getu64(char *&p)
         p++;
     }
     return ret;
-//    bool negative = false;
-//     while (!isdigit(*p) && (*p != '-'))
-//         p++;
-//     u64 ret = 0;
-//     while (isdigit(*p) || (*p == '-'))
-//     {
-//         if (isdigit(*p))
-//         {
-//             ret = 10 * ret + *p - '0';
-//         }
-//         else
-//             negative = true;
-//         p++;
-//     }
-//     if (negative == true)
-//         return (-1) * ret;
-//     else
-//         return ret;
+    //    bool negative = false;
+    //     while (!isdigit(*p) && (*p != '-'))
+    //         p++;
+    //     u64 ret = 0;
+    //     while (isdigit(*p) || (*p == '-'))
+    //     {
+    //         if (isdigit(*p))
+    //         {
+    //             ret = 10 * ret + *p - '0';
+    //         }
+    //         else
+    //             negative = true;
+    //         p++;
+    //     }
+    //     if (negative == true)
+    //         return (-1) * ret;
+    //     else
+    //         return ret;
+}
+
+u128 Constant::Util::getu128(char *&p)
+{
+    while (*p && !isdigit(*p))
+        p++;
+    u128 ret = 0;
+    while (*p && isdigit(*p))
+    {
+        ret = 10 * ret + *p - '0';
+        p++;
+    }
+    return ret;
 }
 
 int Constant::Util::getint(char *&p)
@@ -142,9 +175,6 @@ int Constant::Util::getint(char *&p)
     return ret;
 }
 
-// u64 Constant::Util::randomlong() {
-//     return rand() % MOD;
-// }
 
 u64 Constant::Util::random_u64()
 {
@@ -154,6 +184,21 @@ u64 Constant::Util::random_u64()
     u64 rc = (u64)((rand())) % int(pow(2, 2));
     rc <<= 62;
     return (u64)((rc | rb | ra));
+    // std::random_device rd;
+    // std::mt19937_64 gen(rd());
+    // std::uniform_int_distribution<u64> dis(std::numeric_limits<u64>::min(), std::numeric_limits<u64>::max());
+    // return dis(gen);
+}
+
+u128 Constant::Util::random_field()
+{
+    u128 ra = (u128)((rand()));
+    u128 rb = (u128)((rand()));
+    rb <<= 31;
+    u128 rc = (u128)((rand())) % int(pow(2, 2));
+    rc <<= 62;
+    u128 r_ring = (u128)(rc | rb | ra);
+    return r_ring % P;
     // return 0;
 }
 
@@ -168,153 +213,65 @@ u8 Constant::Util::random_u8()
 //     return dist(gen);
 // }
 
-u64 Constant::Util::multiply(u64 a, u64 b)
+u128 Constant::Util::power(u128 a, u128 b)
 {
-    auto la = (long)a;
-    auto lb = (long)b;
-    long product = (la * lb) / Config::config->IE;
-    return static_cast<u64>(product);
-}
-
-u64 Constant::Util::truncate(u64 x)
-{
-    return static_cast<u64>((long)x / Config::config->IE);
-}
-
-u64 Constant::Util::divide(u64 a, int b)
-{
-    return static_cast<u64>((long)a / (double)b);
-}
-
-// u64 Constant::Util::get_residual(u64 a) {
-//     return (a % MOD + MOD) % MOD;
-// }
-
-// ll128 Constant::Util::get_sign(ll128 a) {
-//     return a > MOD / 2 ? a - MOD : a;
-// }
-
-// ll128 Constant::Util::get_abs(ll128 a) {
-//     return a > 0 ? a : -a;
-// }
-
-// ll128 Constant::Util::sqrt(ll128 a) {
-//     return power(a, MOD + 1 >> 2);
-// }
-
-// u64 Constant::Util::inverse(u64 a, u64 b) {
-//      return power(a, b-2);
-//  }
-
-// u64 Constant::Util::power(u64 a, u64 b) {
-//      u64 ret = 1;
-//      a = (a%MOD+MOD)%MOD;
-//      b = (b%MOD+MOD)%MOD;
-//     if (b == 0)
-//         return 1;
-//     while (b > 0) {
-//         if (b&1) ret = ret * a;
-//         ret = get_residual(ret);
-//         a = a * a;
-//         a = get_residual(a);
-//         b >>= 1;
-//     }
-//     return ret;
-// }
-
-// ll128 Constant::Util::cal_perm(ll128 *key, int l, int k) {
-//     if (!l)
-//         return 1;
-//     vector<ll128> a(l+1);
-//     a[0] = 1;
-//     for (int i = 0; i < M; i++)
-//         if (i != k)
-//             for (int j = l; j; j--) {
-//                 a[j] += a[j - 1] * key[i];
-//                 a[j] = get_residual(a[j]);
-//             }
-//     return a[l];
-// }
-// std::ostream&
-// operator<<( std::ostream& dest, u64 value )
-// {
-//     std::ostream::sentry s( dest );
-//     if ( s ) {
-//         __uint128_t tmp = value < 0 ? -value : value;
-//         char buffer[ 64 ];
-//         char* d = std::end( buffer );
-//         do
-//         {
-//             -- d;
-//             *d = "0123456789"[ tmp % 10 ];
-//             tmp /= 10;
-//         } while ( tmp != 0 );
-//         if ( value < 0 ) {
-//             -- d;
-//             *d = '-';
-//         }
-//         int len = std::end( buffer ) - d;
-//         if ( dest.rdbuf()->sputn( d, len ) != len ) {
-//             dest.setstate( std::ios_base::badbit );
-//         }
-//     }
-//     return dest;
-// }
-// const u64 Constant::inv2 = Constant::Util::inverse(2, MOD);
-
-// const u64 Constant::inv2_m = Constant::Util::inverse(1 << DECIMAL_LENGTH, MOD);
-
-vector<u64> Constant::Util::edabits()
-{
-    vector<u64> res(110); // 1+64+1+44
-    srand((unsigned)time(NULL));
-    u64 r = Constant::Util::random_u64(), _r;
-    res[0] = r;
-    for (int i = 1; i < 65; i++)
+    u128 res = 1;
+    if (b == 0)
+        return res;
+    while (b > 0)
     {
-        res[i] = r % 2;
-        r = r >> 1;
-        if (i >= 20)
-        {
-            if (i == 20)
-            {
-                // r' begins
-                std::cout << "r' is " << r << std::endl;
-                _r = r;
-                res[65] = r;
-            }
-            res[i + 46] = _r % 2;
-            _r = _r >> 1;
-        }
+        if (b & 1)
+            res = res * a;
+        res = res % P;
+        a = a * a;
+        a = a % P;
+        b = b >> 1;
     }
-    std::reverse(res.begin() + 1, res.begin() + 65);
-    std::reverse(res.begin() + 66, res.end());
     return res;
 }
 
-vector<u64> Constant::Util::edabits(u64 r)
+u128 Constant::Util::inverse(u128 a)
 {
-    vector<u64> res(110); // 1+64+1+44
-    u64 _r;
-    res[0] = r;
-    for (int i = 1; i < 65; i++)
+    return power(a, P - 2);
+}
+
+void Constant::Util::pow_2_init()
+{
+    for (int i = 0; i<64; i++)
     {
-        res[i] = r % 2;
-        r = r >> 1;
-        if (i >= 20)
+        pow_2_i[i] = (pow(2, i));
+    }
+    for (int i = 0; i < 64; i++){
+        pow_2_i_inverse[i] = Constant::Util::inverse(pow_2_i[i]);
+    }
+}
+
+std::ostream &
+operator<<(std::ostream &dest, u128 value)
+{
+    std::ostream::sentry s(dest);
+    if (s)
+    {
+        __uint128_t tmp = value < 0 ? -value : value;
+        char buffer[128];
+        char *d = std::end(buffer);
+        do
         {
-            if (i == 20)
-            {
-                // r' begins
-                std::cout << "r' is " << r << std::endl;
-                _r = r;
-                res[65] = r;
-            }
-            res[i + 46] = _r % 2;
-            _r = _r >> 1;
+            --d; 
+            *d = "0123456789"[tmp % 10];
+            tmp /= 10;
+        } while (tmp != 0);
+        if (value < 0)
+        {
+            --d;
+            *d = '-';
+        }
+        int len = std::end(buffer) - d;
+        if (dest.rdbuf()->sputn(d, len) != len)
+        {
+            dest.setstate(std::ios_base::badbit);
         }
     }
-    std::reverse(res.begin() + 1, res.begin() + 65);
-    std::reverse(res.begin() + 66, res.end());
-    return res;
+    return dest;
 }
+

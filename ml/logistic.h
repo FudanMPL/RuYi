@@ -3,24 +3,25 @@
 
 #include "../util/Mat.h"
 #include "../util/IOManager.h"
-#include "../core/Secret_Mul.h"
-#include "../core/Secret_Cmp.h"
+#include "../core/FieldCmp.h"
 
 extern int party;
+extern Cmp_offline *lor_cmp_off1;
+extern Cmp_offline *lor_cmp_off2;
 
 class Logistic
 {
 public:
-    static MatrixXu w, y_inf, delta_w;
+    static FieldShare w;
 
     static int myrandom(int i);
     static vector<int> random_perm();
 
-    static void sigmoid(MatrixXu &x);
+    static void sigmoid(Matrix128 &x);
 
-    static MatrixXu argmax(MatrixXu &x);
+    static Matrix128 argmax(Matrix128 &x);
 
-    static void next_batch(MatrixXu &batch, MatrixXu &delta_batch, int start, vector<int> &perm, MatrixXu &data, MatrixXu &delta_data);
+    static void next_batch(FieldShare &batch, int start, vector<int> &perm, Matrix128 &data, Matrix128 &delta_data);
     static void train_model();
     static void test_model();
     static void inference();

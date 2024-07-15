@@ -15,6 +15,8 @@ public:
                                np(root["np"].asInt()),
                                na(root["na"].asInt()),
                                nd(root["nd"].asInt()),
+                               K(root["K"].asInt()),
+                               KAPPA(root["KAPPA"].asInt()),
                                B(root["B"].asInt()),
                                D(root["D"].asInt()),
                                N(root["N"].asInt()),
@@ -35,6 +37,8 @@ public:
     const int np;             // Number of privileged parties
     const int na;             // Number of assistant parties
     const int nd;             // Number of droped parties
+    const int K;              // Bit length of the secret value
+    const int KAPPA;          // Secret parameter
     const int B;              // Batch size
     const int D;              // Dimension
     const int N;              // the number of train data

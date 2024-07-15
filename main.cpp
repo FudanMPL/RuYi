@@ -3,12 +3,20 @@
 #include "ml/linear.h"
 #include "ml/logistic.h"
 #include "ml/nn.h"
-
+#include <omp.h>
 using namespace std;
 using namespace Eigen;
+// using namespace emp;
 
-u64 send_size = 0;
-u64 receive_size = 0;
+u128 send_size = 0;
+u128 receive_size = 0;
+int rounds = 0;
+Cmp_offline *lor_cmp_off1;
+Cmp_offline *lor_cmp_off2;
+Cmp_offline *nn_cmp_off1;
+Cmp_offline *nn_cmp_off2;
+Cmp_offline *nn_cmp_off3;
+Cmp_offline *nn_cmp_off4;
 
 int main(int argc, char **argv)
 {
@@ -24,59 +32,25 @@ int main(int argc, char **argv)
     DBGprint("party index: %d\n", party);
     Config::config = Config::init("constant.json");
     Mat::init_public_vector();
-    // cout << "A_plus:" << endl
-    //      << Mat::A_plus << endl;
-    // cout << "A_inv:" << endl
-    //      << Mat::A_inv << endl;
-    // cout << "inv_for_mul" << endl;
-    // for (int i = 0; i < Config::config->M; i++)
-    // {
-    //     cout << Mat::inv_for_mul[i] << " ";
-    // }
-    // cout << endl;
-    // cout << "inv_for_div" << endl;
-    // for (int i = 0; i < Config::config->M; i++)
-    // {
-    //     cout << Mat::inv_for_div[i] << " ";
-    // }
-    // cout << endl;
-    // cout << "div_flag" << endl;
-    // for (int i = 0; i < Config::config->M; i++)
-    // {
-    //     cout << Mat::div_flag[i] << " ";
-    // }
-    // cout << endl;
-    Offline::init();
-    // Secret_Mul::init();
-    // Boolean_Share::init();
-    // SocketManager::pMPL tel;
-    // tel.init();
+    Constant::Util::pow_2_init();
     SocketUtil::socket_init();
     IOManager::init();
-    Secret_Mul::get_Triplets();
-    Boolean_Share::test();
+
+    // nn_cmp_off1 = new Cmp_offline(2, 2, Config::config->K, Config::config->K - 1);
+    // nn_cmp_off3 = new Cmp_offline(2, 2, Config::config->K, 1);
+
+    // FieldShare res = ReLU(share);
+    // cout << res.reveal() << endl;
+    // cout << "online time:" << clock_relu->get() << endl;
+    // test_reveal();
+    omp_set_num_threads(8);
     if (Config::config->ML == 0)
         Linear::train_model();
     else if (Config::config->ML == 1)
-    {
-        Secret_Cmp::get_Share(2 * Config::config->B, Config::config->numClass);
         Logistic::train_model();
-    }
     else if (Config::config->ML == 2)
-    {
-        Secret_Cmp::get_Share(Config::config->B, Config::config->hiddenDim);
         NN::train_model();
-    }
-    // Secret_Cmp::get_Share(2 * Config::config->B, Config::config->numClass);
-    // MatrixXu a = Mat::randomMatrixXu(Config::config->B, Config::config->numClass);
-    // MatrixXu delta_a = Mat::randomMatrixXu(Config::config->B, Config::config->numClass);;
-    // Constant::Clock *clock_train;
-    // clock_train = new Constant::Clock(1);
-    // for (int i = 0; i < Config::config->Ep; i++)
-    // {
-    //     MatrixXu z = Secret_Cmp::Sigmoid(a, delta_a);
-    // }
-    // cout << "次/秒：" << Config::config->Ep / clock_train->get() << endl;
-    // SocketManager::print();
-    return 0;
+    // cout << "send size:" << send_size << endl
+    //      << "receive size: " << receive_size << endl;
+    // cout << "rounds: " << rounds << endl;
 }

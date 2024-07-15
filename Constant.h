@@ -12,6 +12,7 @@
 #include <fstream>
 #include <queue>
 #include <Eigen/Dense>
+#include <random>
 
 #include <stdio.h>
 #include <string.h>
@@ -30,20 +31,21 @@
 #include <winsock2.h>
 #endif
 
+#define P 100000000000000003ll
+
 #define DEBUG
 #ifdef DEBUG
 #define DBGprint(...) printf(__VA_ARGS__)
 #else
 #define DBGprint(...)
 #endif
-// #define MULTI_THREAD
+// #define TEST_FOR_TOTAL_TIME
 
 using namespace std;
 using namespace chrono;
 
 typedef uint64_t u64;
-typedef int64_t int64;
-typedef __int128_t int128;
+typedef __uint128_t u128;
 typedef uint8_t u8; // 8 bit
 typedef long long ll;
 
@@ -52,7 +54,6 @@ extern int party;
 class Constant
 {
 public:
-
     static string getDateTime()
     {
         time_t t = std::time(nullptr);
@@ -64,7 +65,7 @@ public:
     class Clock
     {
         int id;
-        system_clock::time_point start;
+        high_resolution_clock::time_point start;
         static u64 global_clock[101];
 
     public:
@@ -72,23 +73,23 @@ public:
         static void print_clock(int id);
         Clock(int id) : id(id)
         {
-            start = system_clock::now();
+            start = high_resolution_clock::now();
         };
         ~Clock()
         {
-            system_clock::time_point end = system_clock::now();
+            high_resolution_clock::time_point end = high_resolution_clock::now();
             decltype(duration_cast<microseconds>(end - start)) time_span = duration_cast<microseconds>(end - start);
             global_clock[id] += time_span.count();
         };
         double get()
         {
-            system_clock::time_point end = system_clock::now();
+            high_resolution_clock::time_point end = high_resolution_clock::now();
             decltype(duration_cast<microseconds>(end - start)) time_span = duration_cast<microseconds>(end - start);
             return time_span.count() * 1.0 * microseconds::period::num / microseconds::period::den;
         }
         void print()
         {
-            system_clock::time_point end = system_clock::now();
+            high_resolution_clock::time_point end = high_resolution_clock::now();
             decltype(duration_cast<microseconds>(end - start)) time_span = duration_cast<microseconds>(end - start);
             DBGprint("duration: %f\n", time_span.count() * 1.0 * microseconds::period::num / microseconds::period::den);
             // printf("duration: %f\n", time_span.count() * 1.0 * microseconds::period::num / microseconds::period::den);
@@ -105,20 +106,27 @@ public:
         static int header_to_int(char *p);
         static u64 double_to_u64(double x);
         static double u64_to_double(u64 u); // unsigned to double, long(signed)
+        static u128 double_to_u128(double x);
         static double char_to_double(char *&p);
+        static double field_to_double(u128 u);
+        static void field_to_bool(bool *bool_, u128 u);
+
         static u64 getu64(char *&p);
+        static u128 getu128(char *&p);
         static int getint(char *&p);
+
         static u64 random_u64();
         static u8 random_u8();
+        static u128 random_field();
 
-        static u64 truncate(u64 u);        // in form of secureML
-        static u64 multiply(u64 a, u64 b); // in form of secureML
-        static u64 divide(u64 a, int b);
+        static u128 power(u128 a, u128 b);
+        static u128 inverse(u128 a);
+        static void pow_2_init();
         static vector<u64> edabits();      // default with 64 bits
         static vector<u64> edabits(u64 r); // default with 64 bits
     };
 };
-// std::ostream&
-// operator<<( std::ostream& dest, u64 value );
+std::ostream &
+operator<<(std::ostream &dest, u128 value);
 
 #endif // ACCESSCONTROL_CONSTANT_H
