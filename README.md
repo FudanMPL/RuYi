@@ -92,5 +92,5 @@ ifstream intest("data/mnist/mnist_test.csv");
 load_data(intest, test_data, test_label, Config::config->testN);
 // if (party == 0)
 //     secret_share(test_data, test_label, "test");
-// intest.close();
+intest.close();
 ```
