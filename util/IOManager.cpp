@@ -115,12 +115,8 @@ void IOManager::secret_share(Matrix128 &data, Matrix128 &label, string category)
     for (int i = 0; i < Config::config->M + Config::config->nd; ++i)
     {
         out_files[i].open("data/mnist/mnist_" + category + "_" + to_string(i) + ".csv", ios::out);
-        // out_files[i].open("data/fashion_mnist/fashion_mnist_" + category + "_" + to_string(i) + ".csv", ios::out);
-        // out_files[i].open("data/svhn/svhn_" + category + "_" + to_string(i) + ".csv", ios::out);
     }
     out_delta_file.open("data/mnist/mnist_" + category + "_delta" + ".csv", ios::out);
-    // out_delta_file.open("data/fashion_mnist/fashion_mnist_" + category + "_delta" + ".csv", ios::out);
-    // out_delta_file.open("data/svhn/svhn_" + category + "_delta" + ".csv", ios::out);
     srand(time(NULL));
 
     int r_x = data.rows();
@@ -264,8 +260,6 @@ void IOManager::init()
     DBGprint("load training data......\n");
 
     // ifstream infile("data/mnist/mnist_train.csv");
-    // // ifstream infile("data/fashion_mnist/fashion_mnist_train.csv");
-    // // ifstream infile("data/svhn/svhn_train.csv");
     // load_data(infile, train_data, train_label, Config::config->N);
     // if (party == 0)
     //     secret_share(train_data, train_label, "train");
@@ -273,24 +267,17 @@ void IOManager::init()
 
     ifstream infile("data/mnist/mnist_train_" + to_string(party) + ".csv");
     ifstream infile_delta("data/mnist/mnist_train_delta.csv");
-    // ifstream infile("data/fashion_mnist/fashion_mnist_train_" + to_string(party) + ".csv");
-    // ifstream infile_delta("data/fashion_mnist/fashion_mnist_train_delta.csv");
-    // ifstream infile("data/svhn/svhn_train_" + to_string(party) + ".csv");
-    // ifstream infile_delta("data/svhn/svhn_train_delta.csv");
     load_ss(infile, train_data, train_label, infile_delta, train_data_delta, train_label_delta, Config::config->N);
     infile.close();
     infile_delta.close();
 
     ifstream intest("data/mnist/mnist_test.csv");
-    // ifstream intest("data/fashion_mnist/fashion_mnist_test.csv");
-    // ifstream intest("data/svhn/svhn_test.csv");
     load_data(intest, test_data, test_label, Config::config->testN);
     // if (party == 0)
     //     secret_share(test_data, test_label, "test");
     intest.close();
 
     // ifstream intest("data/mnist/mnist_test_" + to_string(party) + ".csv");
-    // ifstream intest("data/fashion_mnist/fashion_mnist_test_" + to_string(party) + ".csv");
     // load_ss(intest, test_data, test_label, testN);
     // intest.close();
 }
